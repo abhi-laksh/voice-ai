@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  # Next.js Web Application
+  web-app:
+    build:
+      context: ./apps/web-app
+      dockerfile: Dockerfile
+    container_name: web-app
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://py-app:8000
+    depends_on:
+      - py-app
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # FastAPI Python Backend
+  py-app:
+    build:
+      context: ./apps/py-app
+      dockerfile: Dockerfile
+    container_name: py-app
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    networks:
+      - app-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development setup (optional)
+  web-app-dev:
+    build:
+      context: ./apps/web-app
+      dockerfile: Dockerfile
+      target: deps
+    container_name: web-app-dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - NEXT_PUBLIC_API_URL=http://py-app-dev:8000
+    volumes:
+      - ./apps/web-app:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - py-app-dev
+    networks:
+      - app-network
+    command: ["pnpm", "dev"]
+    profiles:
+      - dev
+
+  py-app-dev:
+    build:
+      context: ./apps/py-app
+      dockerfile: Dockerfile
+      target: deps
+    container_name: py-app-dev
+    ports:
+      - "8001:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    volumes:
+      - ./apps/py-app:/app
+      - /app/.venv
+    networks:
+      - app-network
+    command: ["uv", "run", "python", "main.py"]
+    profiles:
+      - dev
+
+networks:
+  app-network:
+    driver: bridge
+    name: monorepo-network
+
+volumes:
+  node_modules:
+  next_cache:
+  py_venv:
